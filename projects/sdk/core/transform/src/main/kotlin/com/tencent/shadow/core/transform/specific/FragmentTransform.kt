@@ -28,8 +28,11 @@ class FragmentTransform(val mCtClassInputMap: Map<CtClass, InputClass>) : Specif
         const val ShadowFragmentClassname = "com.tencent.shadow.core.runtime.ShadowFragment"
         const val DialogFragmentClassname = "android.app.DialogFragment"
         const val ShadowDialogFragmentClassname = "com.tencent.shadow.core.runtime.ShadowDialogFragment"
+        const val PreferenceFragmentClassname = "android.preference.PreferenceFragment"
+        const val ShadowPreferenceFragmentClassname = "com.tencent.shadow.core.runtime.ShadowPreferenceFragment"
         const val ContainerFragmentClassname = "com.tencent.shadow.core.runtime.ContainerFragment"
         const val ContainerDialogFragmentClassname = "com.tencent.shadow.core.runtime.ContainerDialogFragment"
+        const val ContainerPreferenceFragmentClassname = "com.tencent.shadow.core.runtime.ContainerPreferenceFragment"
     }
 
     val RenameMap = mapOf(
@@ -38,6 +41,9 @@ class FragmentTransform(val mCtClassInputMap: Map<CtClass, InputClass>) : Specif
             ,
             DialogFragmentClassname
                     to ShadowDialogFragmentClassname
+            ,
+            PreferenceFragmentClassname
+                    to ShadowPreferenceFragmentClassname
             ,
             "android.app.FragmentManager"
                     to "com.tencent.shadow.core.runtime.PluginFragmentManager"
@@ -48,6 +54,7 @@ class FragmentTransform(val mCtClassInputMap: Map<CtClass, InputClass>) : Specif
 
     val mAppFragments: MutableSet<CtClass> = mutableSetOf()
     val mAppDialogFragments: MutableSet<CtClass> = mutableSetOf()
+    val mAppPreferenceFragments: MutableSet<CtClass> = mutableSetOf()
 
     /**
      * 当前Transform的App中的Fragment的父类，不在当前Transform的App中，但它是Fragment，记录在这个集合。
@@ -57,6 +64,8 @@ class FragmentTransform(val mCtClassInputMap: Map<CtClass, InputClass>) : Specif
     private fun CtClass.isFragment(): Boolean = isClassOf(FragmentClassname)
 
     private fun CtClass.isDialogFragment(): Boolean = isClassOf(DialogFragmentClassname)
+
+    private fun CtClass.isPreferenceFragment(): Boolean = isClassOf(PreferenceFragmentClassname)
 
     private fun String.appendFragmentAppendix() = this + "_"
 
@@ -70,6 +79,8 @@ class FragmentTransform(val mCtClassInputMap: Map<CtClass, InputClass>) : Specif
             override fun transform(ctClass: CtClass) {
                 if (ctClass.isDialogFragment()) {
                     mAppDialogFragments.add(ctClass)
+                } else if (ctClass.isPreferenceFragment()) {
+                    mAppPreferenceFragments.add(ctClass)
                 } else if (ctClass.isFragment()) {
                     mAppFragments.add(ctClass)
                 }
@@ -79,15 +90,17 @@ class FragmentTransform(val mCtClassInputMap: Map<CtClass, InputClass>) : Specif
         //收集不在当前Transform的App中的类，但它是Fragment.只关心App中的Fragment的父类即可。
         newStep(object : TransformStep {
             override fun filter(allInputClass: Set<CtClass>): Set<CtClass> =
-                    listOf<Set<CtClass>>(mAppDialogFragments, mAppFragments).flatten().toSet()
+                    listOf<Set<CtClass>>(mAppDialogFragments, mAppPreferenceFragments, mAppFragments).flatten().toSet()
 
             override fun transform(ctClass: CtClass) {
                 val superclass = ctClass.superclass
                 if (superclass !in mAppDialogFragments
+                        && superclass !in mAppPreferenceFragments
                         && superclass !in mAppFragments
                         && superclass.isFragment()
                         && superclass.name != FragmentClassname
                         && superclass.name != DialogFragmentClassname
+                        && superclass.name != PreferenceFragmentClassname
                 ) {
                     mRuntimeSuperclassFragments.add(superclass)
                 }
@@ -111,6 +124,7 @@ class FragmentTransform(val mCtClassInputMap: Map<CtClass, InputClass>) : Specif
                 val flattenList = listOf(
                         mAppFragments,
                         mAppDialogFragments,
+                        mAppPreferenceFragments,
                         mRuntimeSuperclassFragments
                 ).flatten()
 
@@ -141,6 +155,7 @@ class FragmentTransform(val mCtClassInputMap: Map<CtClass, InputClass>) : Specif
 
         newStep(MakeContainerStep(mAppFragments, mClassPool[ContainerFragmentClassname]))
         newStep(MakeContainerStep(mAppDialogFragments, mClassPool[ContainerDialogFragmentClassname]))
+        newStep(MakeContainerStep(mAppPreferenceFragments, mClassPool[ContainerPreferenceFragmentClassname]))
     }
 
     inner class MakeContainerStep(private val inputClass: Set<CtClass>,
